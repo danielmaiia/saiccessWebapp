@@ -1,0 +1,44 @@
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: saiccess
+      POSTGRES_PASSWORD: saiccess
+      POSTGRES_DB: saiccess
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U saiccess -d saiccess -h 127.0.0.1 -p 5432"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./apps/backend
+    environment:
+      DATABASE_URL: postgresql://saiccess:saiccess@db:5432/saiccess
+      JWT_SECRET: icQS5bajs3F+2TxG0vDyav6BHSHy/odXfJV4k9DlJEQ=
+      CORS_ORIGIN: http://localhost:5173
+      PORT: "3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: ./apps/frontend
+    environment:
+      VITE_API_URL: http://localhost:3000
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
+volumes:
+  dbdata: {}

@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x"]
+  // opcionalmente também "native":
+  // binaryTargets = ["native", "debian-openssl-3.0.x", "debian-openssl-1.1.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  roles     Role[]
+  policies  Policy[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  mfaEnabled   Boolean  @default(false)
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  assignments  Assignment[]
+  createdAt    DateTime @default(now())
+  reviewItems ReviewItem[]
+
+}
+
+model Role {
+  id        String   @id @default(uuid())
+  name      String
+  key       String
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  grants    Grant[]
+  createdAt DateTime @default(now())
+  assignments  Assignment[]
+
+  reviewItems ReviewItem[]
+
+}
+
+model Grant {
+  id        String   @id @default(uuid())
+  resource  String   // ex: "app:sap:invoice" ou "api:reports"
+  action    String   // ex: "read", "write", "approve"
+  effect    String   // "allow" | "deny"
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+}
+
+model Assignment {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Policy { // SoD e regras de conflito
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  type      String   // "SOD" | "CONSTRAINT"
+  rule      Json     // ex: {"conflicts":[["FIN_APPR","FIN_PAY"]]}
+  enabled   Boolean  @default(true)
+}
+
+model AccessReview { // campanha de revisão de acessos
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  status    String   // "DRAFT" | "RUNNING" | "CLOSED"
+  createdAt DateTime @default(now())
+  items     ReviewItem[]
+}
+
+model ReviewItem {
+  id           String   @id @default(uuid())
+  reviewId     String
+  review       AccessReview @relation(fields: [reviewId], references: [id])
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id])
+  decision     String?  // "KEEP" | "REVOKE"
+  decidedBy    String?
+  decidedAt    DateTime?
+}
+
+model AuditLog { // WORM: sem update/delete via app
+  id        String   @id @default(uuid())
+  ts        DateTime @default(now())
+  tenantId  String
+  actorId   String?
+  action    String
+  target    String?
+  payload   Json
+  ip        String?
+}
